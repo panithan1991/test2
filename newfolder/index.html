@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gravity Swarm - Fireflies</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+let width, height;
+let particles = [];
+const particleCount = 150; // จำนวนหิ่งห้อย
+const mouse = { x: -1000, y: -1000, active: false, clicking: false };
+
+// ปรับขนาด Canvas ให้เต็มจอ
+function resize() {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ดักจับเหตุการณ์เมาส์
+window.addEventListener('mousemove', e => {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+    mouse.active = true;
+});
+window.addEventListener('mousedown', () => mouse.clicking = true);
+window.addEventListener('mouseup', () => mouse.clicking = false);
+
+class Particle {
+    constructor() {
+        this.init();
+    }
+
+    init() {
+        this.x = Math.random() * width;
+        this.y = Math.random() * height;
+        this.vx = (Math.random() - 0.5) * 2;
+        this.vy = (Math.random() - 0.5) * 2;
+        this.size = Math.random() * 2 + 1;
+        this.color = `hsl(${Math.random() * 60 + 180}, 100%, 70%)`; // โทนสีฟ้า-เขียว
+    }
+
+    update() {
+        if (mouse.active) {
+            const dx = mouse.x - this.x;
+            const dy = mouse.y - this.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // ใช้กฎ Gravity: Force = G / r^2 (บวกค่ากันหารด้วย 0)
+            let force = 100 / (distance + 20); 
+
+            // ถ้าคลิกเมาส์ ให้เปลี่ยนเป็นแรงผลัก (Repel)
+            if (mouse.clicking) force *= -5;
+
+            // คำนวณความเร่ง
+            const accX = (dx / distance) * force;
+            const accY = (dy / distance) * force;
+
+            this.vx += accX;
+            this.vy += accY;
+        }
+
+        // ใส่ Friction (แรงเสียดทาน) เพื่อให้นุ่มนวล
+        this.vx *= 0.96;
+        this.vy *= 0.96;
+
+        this.x += this.vx;
+        this.y += this.vy;
+
+        // เด้งขอบจอ
+        if (this.x < 0 || this.x > width) this.vx *= -1;
+        if (this.y < 0 || this.y > height) this.vy *= -1;
+    }
+
+    draw() {
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // ใส่แสง Glow เล็กน้อย
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = this.color;
+    }
+}
+
+// สร้างฝูงหิ่งห้อย
+for (let i = 0; i < particleCount; i++) {
+    particles.push(new Particle());
+}
+
+function animate() {
+    // เคล็ดลับการสร้างหาง: วาดสีดำจางๆ ทับแทนการ Clear หน้าจอ
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+    ctx.fillRect(0, 0, width, height);
+
+    particles.forEach(p => {
+        p.update();
+        p.draw();
+    });
+
+    requestAnimationFrame(animate);
+}
+
+animate();
+</script>
+</body>
+</html>

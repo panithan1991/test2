@@ -57,7 +57,7 @@ class Particle {
             const distance = Math.sqrt(dx * dx + dy * dy);
             
             // ใช้กฎ Gravity: Force = G / r^2 (บวกค่ากันหารด้วย 0)
-            let force = 100 / (distance + 20); 
+            let force = 80 / (distance + 20); 
 
             // ถ้าคลิกเมาส์ ให้เปลี่ยนเป็นแรงผลัก (Repel)
             if (mouse.clicking) force *= -5;

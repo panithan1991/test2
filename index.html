@@ -1,282 +1,118 @@
 <!DOCTYPE html>
-<html lang="th">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monkey Swing HD - ทะยานไปในพงไพร</title>
+    <title>Gravity Swarm - Fireflies</title>
     <style>
-        body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background-color: #051908;
-            font-family: 'Tahoma', sans-serif;
-        }
-        canvas {
-            display: block;
-        }
-        #ui-layer {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            color: white;
-            pointer-events: none;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-        }
-        #msg {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: white;
-            text-align: center;
-            background: rgba(0,0,0,0.6);
-            padding: 30px;
-            border-radius: 20px;
-            border: 2px solid #4CAF50;
-            display: block;
-        }
-        button {
-            background: #4CAF50;
-            border: none;
-            padding: 15px 30px;
-            color: white;
-            font-size: 20px;
-            border-radius: 10px;
-            cursor: pointer;
-            margin-top: 15px;
-        }
-        button:hover { background: #45a049; }
+        body { margin: 0; overflow: hidden; background: #000; }
+        canvas { display: block; }
     </style>
 </head>
 <body>
-
-    <div id="ui-layer">
-        <h2 style="margin:0">คะแนน: <span id="scoreDisplay">0</span></h2>
-    </div>
-
-    <div id="msg">
-        <h1 id="title">MONKEY SWING 🐒</h1>
-        <p>กะจังหวะเหวี่ยงแล้วคลิกเพื่อกระโดดจับเถาวัลย์ถัดไป!</p>
-        <button onclick="startGame()">เริ่มเล่นเกม</button>
-    </div>
-
-    <canvas id="gameCanvas"></canvas>
+    <canvas id="canvas"></canvas>
 
 <script>
-    const canvas = document.getElementById("gameCanvas");
-    const ctx = canvas.getContext("2d");
-    const scoreDisplay = document.getElementById("scoreDisplay");
-    const msgBox = document.getElementById("msg");
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
 
-    // Game Variables
-    let gameState = "menu";
-    let score = 0;
-    let cameraX = 0;
-    let width, height;
+let width, height;
+let particles = [];
+const particleCount = 150; // จำนวนหิ่งห้อย
+const mouse = { x: -1000, y: -1000, active: false, clicking: false };
 
-    const gravity = 0.4;
-    let vines = [];
-    let particles = [];
-    let monkey = {
-        x: 0, y: 0, vx: 0, vy: 0, 
-        isAttached: true, 
-        vineIdx: 0, 
-        angle: 0, 
-        dist: 0,
-        rotation: 0
-    };
+// ปรับขนาด Canvas ให้เต็มจอ
+function resize() {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
 
-    function resize() {
-        width = window.innerWidth;
-        height = window.innerHeight;
-        canvas.width = width;
-        canvas.height = height;
+// ดักจับเหตุการณ์เมาส์
+window.addEventListener('mousemove', e => {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+    mouse.active = true;
+});
+window.addEventListener('mousedown', () => mouse.clicking = true);
+window.addEventListener('mouseup', () => mouse.clicking = false);
+
+class Particle {
+    constructor() {
+        this.init();
     }
 
-    window.addEventListener('resize', resize);
-    resize();
-
-    class Particle {
-        constructor(x, y) {
-            this.x = x; this.y = y;
-            this.vx = (Math.random() - 0.5) * 10;
-            this.vy = (Math.random() - 0.5) * 10;
-            this.life = 1.0;
-            this.color = Math.random() > 0.5 ? "#4CAF50" : "#8BC34A";
-        }
-        update() {
-            this.x += this.vx; this.y += this.vy;
-            this.life -= 0.02;
-        }
-        draw() {
-            ctx.globalAlpha = this.life;
-            ctx.fillStyle = this.color;
-            ctx.beginPath();
-            ctx.arc(this.x - cameraX, this.y, 4, 0, Math.PI*2);
-            ctx.fill();
-            ctx.globalAlpha = 1;
-        }
+    init() {
+        this.x = Math.random() * width;
+        this.y = Math.random() * height;
+        this.vx = (Math.random() - 0.5) * 2;
+        this.vy = (Math.random() - 0.5) * 2;
+        this.size = Math.random() * 2 + 1;
+        this.color = `hsl(${Math.random() * 60 + 180}, 100%, 70%)`; // โทนสีฟ้า-เขียว
     }
 
-    function createVine(x) {
-        return {
-            x: x,
-            y: -50,
-            len: height * 0.4 + Math.random() * 150,
-            angle: 0,
-            speed: 0.02 + Math.random() * 0.02,
-            offset: Math.random() * Math.PI * 2
-        };
+    update() {
+        if (mouse.active) {
+            const dx = mouse.x - this.x;
+            const dy = mouse.y - this.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // ใช้กฎ Gravity: Force = G / r^2 (บวกค่ากันหารด้วย 0)
+            let force = 100 / (distance + 20); 
+
+            // ถ้าคลิกเมาส์ ให้เปลี่ยนเป็นแรงผลัก (Repel)
+            if (mouse.clicking) force *= -5;
+
+            // คำนวณความเร่ง
+            const accX = (dx / distance) * force;
+            const accY = (dy / distance) * force;
+
+            this.vx += accX;
+            this.vy += accY;
+        }
+
+        // ใส่ Friction (แรงเสียดทาน) เพื่อให้นุ่มนวล
+        this.vx *= 0.96;
+        this.vy *= 0.96;
+
+        this.x += this.vx;
+        this.y += this.vy;
+
+        // เด้งขอบจอ
+        if (this.x < 0 || this.x > width) this.vx *= -1;
+        if (this.y < 0 || this.y > height) this.vy *= -1;
     }
 
-    function startGame() {
-        score = 0;
-        cameraX = 0;
-        vines = [];
-        particles = [];
-        scoreDisplay.innerText = "0";
+    draw() {
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
         
-        // สร้างเถาวัลย์เริ่มต้น
-        for(let i = 0; i < 6; i++) {
-            vines.push(createVine(300 + i * 400));
-        }
-
-        monkey.vineIdx = 0;
-        monkey.isAttached = true;
-        monkey.rotation = 0;
-        
-        gameState = "playing";
-        msgBox.style.display = "none";
+        // ใส่แสง Glow เล็กน้อย
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = this.color;
     }
+}
 
-    function update() {
-        if (gameState !== "playing") return;
+// สร้างฝูงหิ่งห้อย
+for (let i = 0; i < particleCount; i++) {
+    particles.push(new Particle());
+}
 
-        // อัปเดตเถาวัลย์
-        vines.forEach(v => {
-            v.angle = Math.sin(Date.now() * 0.002 * (v.speed * 50) + v.offset) * 0.8;
-        });
+function animate() {
+    // เคล็ดลับการสร้างหาง: วาดสีดำจางๆ ทับแทนการ Clear หน้าจอ
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+    ctx.fillRect(0, 0, width, height);
 
-        if (monkey.isAttached) {
-            let v = vines[monkey.vineIdx];
-            monkey.x = v.x + Math.sin(v.angle) * v.len;
-            monkey.y = v.y + Math.cos(v.angle) * v.len;
-            cameraX += (monkey.x - cameraX - 200) * 0.1;
-        } else {
-            monkey.vy += gravity;
-            monkey.x += monkey.vx;
-            monkey.y += monkey.vy;
-            monkey.rotation += 0.1;
-            cameraX += (monkey.x - cameraX - 200) * 0.1;
+    particles.forEach(p => {
+        p.update();
+        p.draw();
+    });
 
-            // ตรวจหาเถาวัลย์ถัดไป
-            for (let i = monkey.vineIdx + 1; i < vines.length; i++) {
-                let v = vines[i];
-                let ex = v.x + Math.sin(v.angle) * v.len;
-                let ey = v.y + Math.cos(v.angle) * v.len;
-                let d = Math.hypot(monkey.x - ex, monkey.y - ey);
+    requestAnimationFrame(animate);
+}
 
-                if (d < 50 && monkey.vy > -2) {
-                    monkey.isAttached = true;
-                    monkey.vineIdx = i;
-                    score++;
-                    scoreDisplay.innerText = score;
-                    // เอฟเฟกต์ใบไม้
-                    for(let p=0; p<10; p++) particles.push(new Particle(monkey.x, monkey.y));
-                    
-                    if (vines.length - i < 5) {
-                        vines.push(createVine(vines[vines.length-1].x + 400));
-                    }
-                    break;
-                }
-            }
-        }
-
-        // ตกจอ
-        if (monkey.y > height + 100) {
-            gameState = "gameover";
-            msgBox.style.display = "block";
-            document.getElementById("title").innerText = "จบเกม! คะแนน: " + score;
-        }
-
-        particles.forEach((p, i) => {
-            p.update();
-            if (p.life <= 0) particles.splice(i, 1);
-        });
-    }
-
-    function draw() {
-        // วาดท้องฟ้าไล่เฉด
-        let skyGrd = ctx.createLinearGradient(0, 0, 0, height);
-        skyGrd.addColorStop(0, "#004d40");
-        skyGrd.addColorStop(1, "#1b5e20");
-        ctx.fillStyle = skyGrd;
-        ctx.fillRect(0, 0, width, height);
-
-        // วาดต้นไม้ไกลๆ (Parallax)
-        ctx.fillStyle = "rgba(0,0,0,0.2)";
-        for(let i=0; i<10; i++) {
-            let px = (i * 600 - cameraX * 0.3) % (600 * 10);
-            ctx.fillRect(px, height-400, 200, 400);
-        }
-
-        // วาดเถาวัลย์
-        vines.forEach(v => {
-            let sx = v.x - cameraX;
-            let ex = sx + Math.sin(v.angle) * v.len;
-            let ey = v.y + Math.cos(v.angle) * v.len;
-
-            // วาดเส้นเถาวัลย์แบบโค้งนิดๆ
-            ctx.beginPath();
-            ctx.moveTo(sx, v.y);
-            ctx.quadraticCurveTo(sx + 20, v.y + v.len/2, ex, ey);
-            ctx.strokeStyle = "#3e2723";
-            ctx.lineWidth = 8;
-            ctx.stroke();
-            ctx.strokeStyle = "#4CAF50";
-            ctx.lineWidth = 3;
-            ctx.stroke();
-        });
-
-        // วาดลิง
-        ctx.save();
-        ctx.translate(monkey.x - cameraX, monkey.y);
-        if (!monkey.isAttached) ctx.rotate(monkey.rotation);
-        ctx.font = "50px Arial";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("🐒", 0, 0);
-        ctx.restore();
-
-        // วาดอนุภาค
-        particles.forEach(p => p.draw());
-    }
-
-    function loop() {
-        update();
-        draw();
-        requestAnimationFrame(loop);
-    }
-
-    function handleAction() {
-        if (gameState === "playing" && monkey.isAttached) {
-            monkey.isAttached = false;
-            let v = vines[monkey.vineIdx];
-            // คำนวณแรงส่ง (ยิ่งแกว่งแรง ยิ่งพุ่งไกล)
-            let swingForce = Math.cos(v.angle) * 12;
-            monkey.vx = 8 + Math.abs(swingForce);
-            monkey.vy = -10 + (v.angle * 5);
-        }
-    }
-
-    window.addEventListener("mousedown", handleAction);
-    window.addEventListener("touchstart", (e) => { e.preventDefault(); handleAction(); });
-    window.addEventListener("keydown", (e) => { if(e.code === "Space") handleAction(); });
-
-    loop();
+animate();
 </script>
 </body>
 </html>
